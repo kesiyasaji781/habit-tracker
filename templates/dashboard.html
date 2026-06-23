@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2 class="mb-4">
+    Welcome, {{ current_user.username }}
+</h2>
+
+<div class="row">
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow">
+
+            <div class="card-body">
+
+                <h5>Total Habits</h5>
+
+                <h2>{{ total_habits }}</h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow">
+
+            <div class="card-body">
+
+                <h5>Completed Today</h5>
+
+                <h2>{{ completed_habits }}</h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow">
+
+            <div class="card-body">
+
+                <h5>Success Rate</h5>
+
+                <h2>{{ completion_rate }}%</h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<hr>
+
+<h3>Add New Habit</h3>
+
+<form action="/add_habit" method="POST">
+
+    <div class="row">
+
+        <div class="col-md-4">
+
+            <input
+                type="text"
+                name="name"
+                class="form-control"
+                placeholder="Habit Name"
+                required>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <select
+                name="category"
+                class="form-control">
+
+                <option>Fitness</option>
+                <option>Study</option>
+                <option>Reading</option>
+                <option>Meditation</option>
+                <option>General</option>
+
+            </select>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <input
+                type="text"
+                name="description"
+                class="form-control"
+                placeholder="Description">
+
+        </div>
+
+        <div class="col-md-2">
+
+            <button
+                class="btn btn-success w-100">
+
+                Add
+
+            </button>
+
+        </div>
+
+    </div>
+
+</form>
+
+<hr>
+
+<h3>Your Habits</h3>
+
+<table class="table table-striped">
+
+<thead>
+
+<tr>
+
+<th>Name</th>
+<th>Category</th>
+<th>Streak</th>
+<th>Status</th>
+<th>Actions</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for habit in habits %}
+
+<tr>
+
+<td>{{ habit.name }}</td>
+
+<td>{{ habit.category }}</td>
+
+<td>{{ habit.streak }}</td>
+
+<td>
+
+{% if habit.completed_today %}
+
+<span class="badge bg-success">
+
+Completed
+
+</span>
+
+{% else %}
+
+<span class="badge bg-warning">
+
+Pending
+
+</span>
+
+{% endif %}
+
+</td>
+
+<td>
+
+<a href="/complete_habit/{{ habit.id }}"
+class="btn btn-success btn-sm"
+onclick="celebrateCompletion()">
+
+Complete
+
+</a>
+
+<a href="/delete_habit/{{ habit.id }}"
+class="btn btn-danger btn-sm"
+onclick="return confirmDelete()">
+
+Delete
+
+</a>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+<hr>
+
+<h3>Weekly Analytics</h3>
+
+<canvas id="habitChart"></canvas>
+
+<script>
+
+fetch('/analytics')
+.then(response => response.json())
+.then(data => {
+
+new Chart(
+document.getElementById('habitChart'),
+{
+type: 'bar',
+
+data: {
+
+labels: data.labels,
+
+datasets: [{
+label: 'Completed Habits',
+data: data.values
+}]
+}
+
+});
+
+});
+
+</script>
+
+{% endblock %}

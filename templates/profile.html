@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="card shadow">
+
+<div class="card-body">
+
+<h2>
+User Profile
+</h2>
+
+<hr>
+
+<h4>
+Username:
+{{ current_user.username }}
+</h4>
+
+<h4>
+Email:
+{{ current_user.email }}
+</h4>
+
+<hr>
+
+<h4>
+Total Habits:
+{{ habits }}
+</h4>
+
+<h4>
+Total Streak Score:
+{{ total_streak }}
+</h4>
+
+</div>
+
+</div>
+
+{% endblock %}
