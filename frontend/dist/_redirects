@@ -1,0 +1,6 @@
+# Redirect all API requests to the Python Flask backend on Render
+# Replace "https://your-habit-tracker-api.onrender.com" with your actual Render service URL!
+/api/*  https://your-habit-tracker-api.onrender.com/api/:splat  200
+
+# Route all other paths to React index.html for SPA routing support
+/*      /index.html                                            200
