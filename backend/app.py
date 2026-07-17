@@ -1,10 +1,10 @@
 from flask import (
     Flask,
-    render_template,
     request,
     redirect,
     url_for,
-    flash
+    flash,
+    send_from_directory
 )
 
 from flask_login import (
@@ -21,15 +21,14 @@ from datetime import datetime, date, timedelta
 
 import os
 
-# Resolve paths to templates and static directories relative to this file
+# Resolve paths to compiled React SPA in frontend/dist
 base_dir = os.path.dirname(os.path.abspath(__file__))
-template_dir = os.path.join(base_dir, "..", "frontend", "templates")
-static_dir = os.path.join(base_dir, "..", "frontend", "static")
+static_dir = os.path.join(base_dir, "..", "frontend", "dist")
 
 app = Flask(
     __name__,
-    template_folder=template_dir,
-    static_folder=static_dir
+    static_folder=static_dir,
+    static_url_path=""
 )
 
 # ==========================
@@ -50,16 +49,15 @@ db.init_app(app)
 # ==========================
 
 login_manager = LoginManager()
-
 login_manager.init_app(app)
-
-login_manager.login_view = "login"
-
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+@login_manager.unauthorized_handler
+def unauthorized():
+    return {"error": "Unauthorized access. Please log in."}, 401
 
 # ==========================
 # DATABASE CREATION
@@ -68,147 +66,139 @@ def load_user(user_id):
 with app.app_context():
     db.create_all()
 
-
 # ==========================
-# HOME
-# ==========================
-
-@app.route("/")
-def home():
-
-    if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
-
-    return redirect(url_for("login"))
-
-
-# ==========================
-# REGISTER
+# AUTHENTICATION API
 # ==========================
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
+@app.route("/api/auth/register", methods=["POST"])
+def api_register():
+    data = request.get_json() or {}
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
 
-    if request.method == "POST":
+    if not username or not email or not password:
+        return {"error": "Missing required fields"}, 400
 
-        username = request.form["username"]
-        email = request.form["email"]
-        password = request.form["password"]
+    existing_user = User.query.filter(
+        (User.username == username) |
+        (User.email == email)
+    ).first()
 
-        existing_user = User.query.filter(
-            (User.username == username) |
-            (User.email == email)
-        ).first()
+    if existing_user:
+        return {"error": "User already exists"}, 400
 
-        if existing_user:
-            flash("User already exists")
-            return redirect(url_for("register"))
+    user = User(
+        username=username,
+        email=email
+    )
+    user.set_password(password)
 
-        user = User(
-            username=username,
-            email=email
-        )
+    db.session.add(user)
+    db.session.commit()
 
-        user.set_password(password)
+    return {"message": "Registration successful"}, 201
 
-        db.session.add(user)
-        db.session.commit()
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    data = request.get_json() or {}
+    email = data.get("email")
+    password = data.get("password")
 
-        flash("Registration successful")
+    if not email or not password:
+        return {"error": "Missing email or password"}, 400
 
-        return redirect(url_for("login"))
+    user = User.query.filter_by(email=email).first()
 
-    return render_template("register.html")
+    if user and user.check_password(password):
+        login_user(user)
+        return {
+            "message": "Logged in successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email
+            }
+        }, 200
 
+    return {"error": "Invalid credentials"}, 401
 
-# ==========================
-# LOGIN
-# ==========================
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-
-    if request.method == "POST":
-
-        email = request.form["email"]
-        password = request.form["password"]
-
-        user = User.query.filter_by(
-            email=email
-        ).first()
-
-        if user and user.check_password(password):
-
-            login_user(user)
-
-            return redirect(url_for("dashboard"))
-
-        flash("Invalid credentials")
-
-    return render_template("login.html")
-
-
-# ==========================
-# LOGOUT
-# ==========================
-
-@app.route("/logout")
+@app.route("/api/auth/logout", methods=["POST"])
 @login_required
-def logout():
-
+def api_logout():
     logout_user()
+    return {"message": "Logged out successfully"}, 200
 
-    return redirect(url_for("login"))
-
+@app.route("/api/auth/status", methods=["GET"])
+def api_status():
+    if current_user.is_authenticated:
+        return {
+            "authenticated": True,
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": current_user.email
+            }
+        }, 200
+    return {"authenticated": False}, 200
 
 # ==========================
-# DASHBOARD
+# HABITS API
 # ==========================
 
-@app.route("/dashboard")
+@app.route("/api/habits", methods=["GET"])
 @login_required
-def dashboard():
-
-    habits = Habit.query.filter_by(
-        user_id=current_user.id
-    ).all()
+def api_get_habits():
+    habits = Habit.query.filter_by(user_id=current_user.id).all()
+    today = date.today()
+    
+    # Auto-update completed_today dynamically based on presence of logs for today
+    for habit in habits:
+        log = HabitLog.query.filter_by(habit_id=habit.id, date=today).first()
+        habit.completed_today = log is not None and log.completed
+        
+        # Check streak break: if no log yesterday AND no log today, reset streak to 0
+        yesterday = today - timedelta(days=1)
+        log_yesterday = HabitLog.query.filter_by(habit_id=habit.id, date=yesterday).first()
+        if not log_yesterday and not habit.completed_today:
+            habit.streak = 0
+            
+    db.session.commit()
 
     total_habits = len(habits)
-
-    completed_habits = len([
-        habit for habit in habits
-        if habit.completed_today
-    ])
-
+    completed_habits = len([h for h in habits if h.completed_today])
     completion_rate = 0
-
     if total_habits > 0:
-        completion_rate = round(
-            (completed_habits / total_habits) * 100
-        )
+        completion_rate = round((completed_habits / total_habits) * 100)
 
-    return render_template(
-        "dashboard.html",
-        habits=habits,
-        total_habits=total_habits,
-        completed_habits=completed_habits,
-        completion_rate=completion_rate
-    )
+    habits_list = []
+    for habit in habits:
+        habits_list.append({
+            "id": habit.id,
+            "name": habit.name,
+            "category": habit.category,
+            "description": habit.description,
+            "streak": habit.streak,
+            "completed_today": habit.completed_today
+        })
 
+    return {
+        "habits": habits_list,
+        "total_habits": total_habits,
+        "completed_habits": completed_habits,
+        "completion_rate": completion_rate
+    }, 200
 
-# ==========================
-# ADD HABIT
-# ==========================
-
-@app.route("/add_habit", methods=["POST"])
+@app.route("/api/habits", methods=["POST"])
 @login_required
-def add_habit():
+def api_add_habit():
+    data = request.get_json() or {}
+    name = data.get("name")
+    category = data.get("category", "General")
+    description = data.get("description", "")
 
-    name = request.form["name"]
-
-    category = request.form["category"]
-
-    description = request.form["description"]
+    if not name:
+        return {"error": "Missing habit name"}, 400
 
     habit = Habit(
         name=name,
@@ -218,138 +208,132 @@ def add_habit():
     )
 
     db.session.add(habit)
-
     db.session.commit()
 
-    flash("Habit Added")
+    return {
+        "id": habit.id,
+        "name": habit.name,
+        "category": habit.category,
+        "description": habit.description,
+        "streak": habit.streak,
+        "completed_today": habit.completed_today
+    }, 201
 
-    return redirect(url_for("dashboard"))
-
-
-# ==========================
-# DELETE HABIT
-# ==========================
-
-@app.route("/delete_habit/<int:id>")
+@app.route("/api/habits/<int:id>/complete", methods=["POST"])
 @login_required
-def delete_habit(id):
-
+def api_complete_habit(id):
     habit = Habit.query.get_or_404(id)
 
     if habit.user_id != current_user.id:
-        return redirect(url_for("dashboard"))
-
-    db.session.delete(habit)
-
-    db.session.commit()
-
-    flash("Habit Deleted")
-
-    return redirect(url_for("dashboard"))
-
-
-# ==========================
-# COMPLETE HABIT
-# ==========================
-
-@app.route("/complete_habit/<int:id>")
-@login_required
-def complete_habit(id):
-
-    habit = Habit.query.get_or_404(id)
-
-    if habit.user_id != current_user.id:
-        return redirect(url_for("dashboard"))
+        return {"error": "Unauthorized access"}, 403
 
     today = date.today()
-
     existing_log = HabitLog.query.filter_by(
         habit_id=habit.id,
         date=today
     ).first()
 
     if not existing_log:
-
         log = HabitLog(
             date=today,
             completed=True,
             habit_id=habit.id
         )
-
         db.session.add(log)
-
+        
         habit.completed_today = True
-
         habit.streak += 1
-
         db.session.commit()
 
-    flash("Habit Completed")
+    return {
+        "message": "Habit completed",
+        "habit": {
+            "id": habit.id,
+            "name": habit.name,
+            "category": habit.category,
+            "description": habit.description,
+            "streak": habit.streak,
+            "completed_today": habit.completed_today
+        }
+    }, 200
 
-    return redirect(url_for("dashboard"))
-
-
-# ==========================
-# PROFILE
-# ==========================
-
-@app.route("/profile")
+@app.route("/api/habits/<int:id>", methods=["DELETE"])
 @login_required
-def profile():
+def api_delete_habit(id):
+    habit = Habit.query.get_or_404(id)
 
-    habits = Habit.query.filter_by(
-        user_id=current_user.id
-    ).all()
+    if habit.user_id != current_user.id:
+        return {"error": "Unauthorized access"}, 403
 
-    total_streak = sum(
-        habit.streak for habit in habits
-    )
+    # Clean up associated logs
+    HabitLog.query.filter_by(habit_id=habit.id).delete()
+    
+    db.session.delete(habit)
+    db.session.commit()
 
-    return render_template(
-        "profile.html",
-        total_streak=total_streak,
-        habits=len(habits)
-    )
+    return {"message": "Habit Deleted"}, 200
 
+# ==========================
+# PROFILE API
+# ==========================
+
+@app.route("/api/profile", methods=["GET"])
+@login_required
+def api_profile():
+    habits = Habit.query.filter_by(user_id=current_user.id).all()
+    total_streak = sum(habit.streak for habit in habits)
+
+    return {
+        "username": current_user.username,
+        "total_streak": total_streak,
+        "total_habits": len(habits)
+    }, 200
 
 # ==========================
 # WEEKLY ANALYTICS
 # ==========================
 
-@app.route("/analytics")
+@app.route("/api/analytics", methods=["GET"])
 @login_required
-def analytics():
-
+def api_analytics():
     today = date.today()
-
     week_ago = today - timedelta(days=6)
 
+    # Filter logs belonging to the current user's habits
+    user_habit_ids = [h.id for h in Habit.query.filter_by(user_id=current_user.id).all()]
+    
     logs = HabitLog.query.filter(
-        HabitLog.date >= week_ago
+        HabitLog.date >= week_ago,
+        HabitLog.habit_id.in_(user_habit_ids) if user_habit_ids else False
     ).all()
 
     daily_counts = {}
-
     for i in range(7):
-
         day = week_ago + timedelta(days=i)
-
         daily_counts[str(day)] = 0
 
     for log in logs:
-
         if log.completed:
             daily_counts[str(log.date)] += 1
 
     labels = list(daily_counts.keys())
-
     values = list(daily_counts.values())
 
     return {
         "labels": labels,
         "values": values
-    }
+    }, 200
 
+# ==========================
+# STATIC FILES catch-all
+# ==========================
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def catch_all(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return app.send_static_file(path)
+    return app.send_static_file("index.html")
 
 # ==========================
 # RUN APP
