@@ -2,8 +2,8 @@ export async function safeFetch(url, options = {}) {
   try {
     const response = await fetch(url, options);
     
-    // Check if the response is unauthorized (401)
-    if (response.status === 401 && !url.includes('/api/auth/status')) {
+    // Check if the response is unauthorized (401) and not part of auth routes (like login)
+    if (response.status === 401 && !url.includes('/api/auth/')) {
       throw new Error('Session expired or unauthorized. Please login.');
     }
 
