@@ -19,7 +19,18 @@ from models import db, User, Habit, HabitLog
 
 from datetime import datetime, date, timedelta
 
-app = Flask(__name__)
+import os
+
+# Resolve paths to templates and static directories relative to this file
+base_dir = os.path.dirname(os.path.abspath(__file__))
+template_dir = os.path.join(base_dir, "..", "frontend", "templates")
+static_dir = os.path.join(base_dir, "..", "frontend", "static")
+
+app = Flask(
+    __name__,
+    template_folder=template_dir,
+    static_folder=static_dir
+)
 
 # ==========================
 # CONFIGURATION
