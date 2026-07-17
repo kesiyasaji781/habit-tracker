@@ -340,6 +340,10 @@ def catch_all(path):
 # ==========================
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    is_prod = "RENDER" in os.environ
     app.run(
-        debug=True
+        host="0.0.0.0",
+        port=port,
+        debug=not is_prod
     )
