@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { safeFetch } from '../utils/api';
 
 export default function Login({ onLoginSuccess, onNavigate }) {
   const [email, setEmail] = useState('');
@@ -12,16 +13,11 @@ export default function Login({ onLoginSuccess, onNavigate }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const data = await safeFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
 
       onLoginSuccess(data.user);
     } catch (err) {

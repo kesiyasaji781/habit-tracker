@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { safeFetch } from '../utils/api';
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
@@ -8,11 +9,7 @@ export default function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch('/api/profile');
-        if (!response.ok) {
-          throw new Error('Failed to load profile details');
-        }
-        const data = await response.json();
+        const data = await safeFetch('/api/profile');
         setProfile(data);
       } catch (err) {
         setError(err.message);

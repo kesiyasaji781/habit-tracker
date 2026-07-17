@@ -4,6 +4,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import { safeFetch } from './utils/api';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -13,9 +14,8 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/api/auth/status');
-      const data = await response.json();
-      if (response.ok && data.authenticated) {
+      const data = await safeFetch('/api/auth/status');
+      if (data.authenticated) {
         setUser(data.user);
         setPage('dashboard');
       } else {
@@ -48,14 +48,10 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' });
-      if (response.ok) {
-        setUser(null);
-        showNotification('You logged out successfully.');
-        setPage('login');
-      } else {
-        throw new Error('Logout failed');
-      }
+      await safeFetch('/api/auth/logout', { method: 'POST' });
+      setUser(null);
+      showNotification('You logged out successfully.');
+      setPage('login');
     } catch (err) {
       showNotification('Logout error: ' + err.message, true);
     }

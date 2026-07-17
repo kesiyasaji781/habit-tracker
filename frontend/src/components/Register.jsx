@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { safeFetch } from '../utils/api';
 
 export default function Register({ onRegisterSuccess, onNavigate }) {
   const [username, setUsername] = useState('');
@@ -13,16 +14,11 @@ export default function Register({ onRegisterSuccess, onNavigate }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/register', {
+      await safeFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
 
       onRegisterSuccess();
     } catch (err) {

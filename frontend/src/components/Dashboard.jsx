@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Check, Trash2, TrendingUp, Sparkles, Award } from 'lucide-react';
+import { safeFetch } from '../utils/api';
 
 export default function Dashboard() {
   const [habits, setHabits] = useState([]);
@@ -19,9 +20,7 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       // Fetch habits and stats
-      const habitsRes = await fetch('/api/habits');
-      if (!habitsRes.ok) throw new Error('Failed to load habits');
-      const habitsData = await habitsRes.json();
+      const habitsData = await safeFetch('/api/habits');
       setHabits(habitsData.habits);
       setStats({
         total_habits: habitsData.total_habits,
@@ -30,11 +29,8 @@ export default function Dashboard() {
       });
 
       // Fetch weekly analytics
-      const analyticsRes = await fetch('/api/analytics');
-      if (analyticsRes.ok) {
-        const analyticsData = await analyticsRes.json();
-        setAnalytics(analyticsData);
-      }
+      const analyticsData = await safeFetch('/api/analytics');
+      setAnalytics(analyticsData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -51,16 +47,11 @@ export default function Dashboard() {
     if (!name.trim()) return;
 
     try {
-      const response = await fetch('/api/habits', {
+      await safeFetch('/api/habits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, category, description }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to add habit');
-      }
 
       setName('');
       setDescription('');
@@ -72,14 +63,9 @@ export default function Dashboard() {
 
   const handleCompleteHabit = async (id) => {
     try {
-      const response = await fetch(`/api/habits/${id}/complete`, {
+      await safeFetch(`/api/habits/${id}/complete`, {
         method: 'POST',
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to complete habit');
-      }
 
       // Trigger micro-celebration animation
       triggerConfetti();
@@ -93,14 +79,9 @@ export default function Dashboard() {
     if (!window.confirm('Are you sure you want to delete this habit?')) return;
 
     try {
-      const response = await fetch(`/api/habits/${id}`, {
+      await safeFetch(`/api/habits/${id}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete habit');
-      }
 
       fetchData();
     } catch (err) {
