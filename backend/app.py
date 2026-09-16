@@ -15,6 +15,8 @@ from flask_login import (
     current_user
 )
 
+from flask_cors import CORS
+
 from models import db, User, Habit, HabitLog
 
 from datetime import datetime, date, timedelta
@@ -31,11 +33,20 @@ app = Flask(
     static_url_path=""
 )
 
+# Enable CORS for GitHub Pages & Local development
+CORS(app, supports_credentials=True, origins=[
+    "https://kesiyasaji781.github.io",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+])
+
 # ==========================
 # CONFIGURATION
 # ==========================
 
 app.config["SECRET_KEY"] = "habit_tracker_secret_key"
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True
 
 app.config["SQLALCHEMY_DATABASE_URI"] = \
     "sqlite:///database.db"

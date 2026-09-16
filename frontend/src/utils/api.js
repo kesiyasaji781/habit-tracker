@@ -1,6 +1,20 @@
+const RENDER_BACKEND_URL = 'https://habit-tracker1-yaaf.onrender.com';
+
 export async function safeFetch(url, options = {}) {
   try {
-    const response = await fetch(url, options);
+    // If hosted on GitHub Pages (github.io), point /api requests to Render backend
+    const isGithubPages = window.location.hostname.includes('github.io');
+    const fullUrl = (isGithubPages && url.startsWith('/api'))
+      ? `${RENDER_BACKEND_URL}${url}`
+      : url;
+
+    // Send session cookies with fetch requests
+    const fetchOptions = {
+      credentials: 'include',
+      ...options,
+    };
+
+    const response = await fetch(fullUrl, fetchOptions);
     
     // Check if the response is unauthorized (401) and not part of auth routes (like login)
     if (response.status === 401 && !url.includes('/api/auth/')) {
